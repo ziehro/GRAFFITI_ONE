@@ -10,6 +10,7 @@ import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.view.MotionEvent;
 import android.view.ViewTreeObserver;
+import android.widget.Button;
 import android.widget.Toast;
 
 import com.google.ar.core.Anchor;
@@ -17,6 +18,7 @@ import com.google.ar.core.ArCoreApk;
 import com.google.ar.core.HitResult;
 import com.google.ar.core.Plane;
 import com.google.ar.core.Pose;
+import com.google.ar.core.Session;
 import com.google.ar.core.Trackable;
 import com.google.ar.sceneform.AnchorNode;
 import com.google.ar.sceneform.math.Quaternion;
@@ -33,6 +35,8 @@ public class ARActivity extends AppCompatActivity {
     private ArFragment arFragment;
     private boolean isSpraying = false;
     private Vector3 lastPoint = null;
+    private boolean isDrawingBlocks = false;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,6 +50,17 @@ public class ARActivity extends AppCompatActivity {
 
         requestCameraPermissionIfNeeded();
         initializeArFragment();
+
+        Button blockButton = findViewById(R.id.blockButton);
+        blockButton.setOnClickListener(view -> {
+            isDrawingBlocks = !isDrawingBlocks; // Toggle between drawing modes
+            if (isDrawingBlocks) {
+                blockButton.setBackgroundColor(android.graphics.Color.GRAY); // Change color to indicate active mode
+            } else {
+                blockButton.setBackgroundColor(android.graphics.Color.WHITE); // Reset color
+            }
+        });
+
 
 
     }
@@ -119,14 +134,32 @@ public class ARActivity extends AppCompatActivity {
         for (HitResult hit : arFragment.getArSceneView().getArFrame().hitTest(motionEvent)) {
             Trackable trackable = hit.getTrackable();
             if (trackable instanceof Plane && ((Plane) trackable).isPoseInPolygon(hit.getHitPose())) {
-                Vector3 currentPoint = new Vector3(hit.getHitPose().tx(), hit.getHitPose().ty(), hit.getHitPose().tz());
-                if (lastPoint != null) {
-                    drawLineBetweenPoints(lastPoint, currentPoint);
+                if (isDrawingBlocks) {
+                    placeBlock(hit.getHitPose());
+                } else {
+                    Vector3 currentPoint = new Vector3(hit.getHitPose().tx(), hit.getHitPose().ty(), hit.getHitPose().tz());
+                    if (lastPoint != null) {
+                        drawLineBetweenPoints(lastPoint, currentPoint);
+                    }
+                    lastPoint = currentPoint;
                 }
-                lastPoint = currentPoint;
             }
         }
     }
+    private void placeBlock(Pose pose) {
+        // Use a similar approach to the placeGraffiti method but place a cube (block) instead.
+        MaterialFactory.makeOpaqueWithColor(this, new Color(android.graphics.Color.BLUE))
+                .thenAccept(material -> {
+                    ModelRenderable renderable = ShapeFactory.makeCube(new Vector3(0.05f, 0.05f, 0.05f), Vector3.zero(), material);
+                    Session session = arFragment.getArSceneView().getSession();
+                    Anchor anchor = session.createAnchor(pose);
+
+                    AnchorNode anchorNode = new AnchorNode(anchor);
+                    anchorNode.setRenderable(renderable);
+                    anchorNode.setParent(arFragment.getArSceneView().getScene());
+                });
+    }
+
 
     private void drawLineBetweenPoints(Vector3 start, Vector3 end) {
         // This method will create and place a visual representation of a line between two points.
